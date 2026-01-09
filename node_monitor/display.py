@@ -221,39 +221,47 @@ def create_compact_table(nodes: List[NodeStatus], refresh_interval: float, termi
     header = create_header(nodes, refresh_interval, terminal_width)
     
     # Calculate if we can fit 2 GPUs per row
-    # Single GPU row needs about 75 chars, dual needs about 150
-    dual_column = terminal_width >= 150
+    # 优化策略：由于我们压缩了单列的宽度，Dual Column (双列) 模式的触发阈值可以降低
+    # 原单列约需 75 字符，优化后约需 55 字符。双列现在只需要约 110-120 字符即可显示
+    dual_column = terminal_width >= 120  # 从 150 降到 120，更容易触发双列显示
     
-    # Create table
+    # 定义超参数 (Hyperparameters)
+    BAR_WIDTH = 6          #  将进度条从 8/10 减少到 6，视觉更紧凑
+    GPU_COL_WIDTH = 2      #  GPU ID 只需要很窄的空间
+    UTIL_COL_WIDTH = 4     #  "100%" 刚好4个字符
+    MEM_COL_WIDTH = 11     #  根据截图 74.9G/79.6G 刚好紧凑放下
+
     table = Table(
         box=box.SIMPLE_HEAD,
         show_header=True,
         header_style="bold cyan",
         expand=True,
-        padding=(0, 1),
+        padding=(0, 1), # 保持左右各1个空格的padding，避免太拥挤
     )
     
     if dual_column:
         # Dual-column GPU layout
-        table.add_column("Node", style="bold white", no_wrap=True, min_width=12)
-        table.add_column("GPU", justify="center", width=3)
-        table.add_column("Util", justify="right", width=5)
-        table.add_column("Bar", width=10)
-        table.add_column("Memory", justify="right", width=11)
-        table.add_column("", width=1)  # Separator
-        table.add_column("GPU", justify="center", width=3)
-        table.add_column("Util", justify="right", width=5)
-        table.add_column("Bar", width=10)
-        table.add_column("Memory", justify="right", width=11)
+        table.add_column("Node", style="bold white", no_wrap=True, min_width=10) # 稍微减小 min_width
+        table.add_column("#", justify="center", width=GPU_COL_WIDTH)       #  "#"
+        table.add_column("Utl", justify="right", width=UTIL_COL_WIDTH)     #  "Utl"
+        table.add_column("", width=BAR_WIDTH)                              #  ""
+        table.add_column("Mem", justify="right", width=MEM_COL_WIDTH)      # shorter Header
+        
+        table.add_column("│", justify="center", width=1, style="dim") 
+        
+        table.add_column("#", justify="center", width=GPU_COL_WIDTH)
+        table.add_column("Utl", justify="right", width=UTIL_COL_WIDTH)
+        table.add_column("", width=BAR_WIDTH)
+        table.add_column("Mem", justify="right", width=MEM_COL_WIDTH)
     else:
         # Single-column GPU layout
         table.add_column("Node", style="bold white", no_wrap=True, min_width=12)
-        table.add_column("GPU", justify="center", width=3)
-        table.add_column("Util", justify="right", width=5)
-        table.add_column("Util Bar", width=10)
-        table.add_column("Memory", justify="right", width=12)
-        table.add_column("Mem Bar", width=10)
-        table.add_column("Mem%", justify="right", width=5)
+        table.add_column("#", justify="center", width=GPU_COL_WIDTH)       #  Header: GPU -> #
+        table.add_column("Util", justify="right", width=UTIL_COL_WIDTH)
+        table.add_column("", width=BAR_WIDTH)                              #  Header: Util Bar -> ""
+        table.add_column("Memory", justify="right", width=MEM_COL_WIDTH)
+        table.add_column("", width=BAR_WIDTH)                              #  Header: Mem Bar -> ""
+        table.add_column("%", justify="right", width=4)                    #  Header: Mem% -> %
     
     for node in nodes:
         if not node.is_online:
