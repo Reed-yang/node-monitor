@@ -11,7 +11,7 @@ from rich.text import Text
 from rich.columns import Columns
 from rich import box
 
-from node_monitor.monitor import NodeStatus, GPUInfo
+from node_monitor.monitor import NodeStatus, GPUInfo, GPUProcess
 
 
 def get_utilization_color(percent: float) -> str:
@@ -216,7 +216,7 @@ def create_dashboard(nodes: List[NodeStatus], refresh_interval: float, terminal_
     return Group(*elements)
 
 
-def create_compact_table(nodes: List[NodeStatus], refresh_interval: float, terminal_width: int = 120) -> Group:
+def create_compact_table(nodes: List[NodeStatus], refresh_interval: float, terminal_width: int = 120, show_processes: bool = False) -> Group:
     """Create a compact table view with multi-column GPU display when width allows."""
     header = create_header(nodes, refresh_interval, terminal_width)
     
@@ -359,19 +359,47 @@ def create_compact_table(nodes: List[NodeStatus], refresh_interval: float, termi
                     Text(f"{gpu.memory_percent:.0f}%", style=f"bold {mem_color}"),
                 )
     
+    # Add process info if enabled
+    process_elements = []
+    if show_processes:
+        for node in nodes:
+            if node.is_online and node.all_processes:
+                proc_text = Text()
+                proc_text.append(f"  📋 {node.hostname} processes: ", style="dim white")
+                
+                # Group processes by user
+                user_procs = {}
+                for proc in node.all_processes:
+                    if proc.user not in user_procs:
+                        user_procs[proc.user] = []
+                    user_procs[proc.user].append(proc)
+                
+                parts = []
+                for user, procs in sorted(user_procs.items()):
+                    gpu_ids = sorted(set(p.gpu_index for p in procs))
+                    total_mem = sum(p.memory_used for p in procs)
+                    gpu_str = ','.join(str(g) for g in gpu_ids)
+                    parts.append(f"{user}[GPU {gpu_str}]:{format_memory(total_mem)}")
+                
+                proc_text.append(' │ '.join(parts), style="cyan")
+                process_elements.append(proc_text)
+    
     footer = Text("\n  Press Ctrl+C to exit", style="dim italic")
     
+    if process_elements:
+        return Group(header, Text(""), table, Text(""), *process_elements, footer)
     return Group(header, Text(""), table, footer)
 
 
 class DashboardDisplay:
     """Manages the live dashboard display."""
     
-    def __init__(self, refresh_interval: float = 2.0, compact: bool = False, fullscreen: bool = True):
+    def __init__(self, refresh_interval: float = 2.0, compact: bool = False, fullscreen: bool = True, show_processes: bool = False):
         self.console = Console()
         self.refresh_interval = refresh_interval
         self.compact = compact
         self.fullscreen = fullscreen
+        self.show_processes = show_processes
         self.live: Optional[Live] = None
     
     def start(self):
@@ -395,7 +423,7 @@ class DashboardDisplay:
             width = self.console.width
             
             if self.compact:
-                dashboard = create_compact_table(nodes, self.refresh_interval, width)
+                dashboard = create_compact_table(nodes, self.refresh_interval, width, self.show_processes)
             else:
                 dashboard = create_dashboard(nodes, self.refresh_interval, width)
             self.live.update(dashboard)

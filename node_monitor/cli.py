@@ -49,8 +49,14 @@ console = Console()
     default=False,
     help="Disable fullscreen mode (allows terminal scrolling)",
 )
+@click.option(
+    "--processes", "-p",
+    is_flag=True,
+    default=False,
+    help="Show GPU processes with user info (requires -c compact mode)",
+)
 @click.version_option(version=__version__, prog_name="node-monitor")
-def main(nodes: Optional[str], interval: float, workers: int, compact: bool, no_fullscreen: bool):
+def main(nodes: Optional[str], interval: float, workers: int, compact: bool, no_fullscreen: bool, processes: bool):
     """
     🖥️  GPU Cluster Monitor - Monitor GPU resources across Slurm nodes.
     
@@ -63,7 +69,7 @@ def main(nodes: Optional[str], interval: float, workers: int, compact: bool, no_
         node-monitor -n visko-1,visko-2  # Monitor specific nodes
         node-monitor -i 5                # Refresh every 5 seconds
         node-monitor -c                  # Compact table view
-        node-monitor -c -F               # Compact + scrollable
+        node-monitor -c -p               # Compact + show processes
     """
     # Determine nodes to monitor
     if nodes:
@@ -83,9 +89,16 @@ def main(nodes: Optional[str], interval: float, workers: int, compact: bool, no_
         console.print("[red]✗ No nodes to monitor[/]")
         sys.exit(1)
     
+    # Process display requires compact mode
+    if processes and not compact:
+        console.print("[yellow]💡 Note: --processes requires --compact mode, enabling compact mode[/]")
+        compact = True
+    
     mode_info = []
     if compact:
         mode_info.append("compact")
+    if processes:
+        mode_info.append("processes")
     if no_fullscreen:
         mode_info.append("scrollable")
     mode_str = f" ({', '.join(mode_info)})" if mode_info else ""
@@ -109,10 +122,11 @@ def main(nodes: Optional[str], interval: float, workers: int, compact: bool, no_
             refresh_interval=interval,
             compact=compact,
             fullscreen=not no_fullscreen,
+            show_processes=processes,
         ) as display:
             while running:
                 # Query all nodes in parallel
-                statuses = query_all_nodes(node_list, max_workers=workers)
+                statuses = query_all_nodes(node_list, max_workers=workers, show_processes=processes)
                 
                 # Update display
                 display.update(statuses)
@@ -127,4 +141,3 @@ def main(nodes: Optional[str], interval: float, workers: int, compact: bool, no_
 
 if __name__ == "__main__":
     main()
-
