@@ -210,12 +210,124 @@ def create_dashboard(nodes: List[NodeStatus], refresh_interval: float) -> Panel:
     return Group(*elements)
 
 
+def create_compact_bar(percent: float, width: int = 10) -> str:
+    """Create a compact progress bar."""
+    filled = int((percent / 100) * width)
+    return "█" * filled + "░" * (width - filled)
+
+
+def create_compact_table(nodes: List[NodeStatus], refresh_interval: float) -> Group:
+    """Create a compact table view showing all nodes and GPUs."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Calculate cluster summary
+    total_gpus = sum(node.total_gpus for node in nodes if node.is_online)
+    online_nodes = sum(1 for node in nodes if node.is_online)
+    offline_nodes = sum(1 for node in nodes if not node.is_online)
+    
+    total_util = 0
+    total_mem_used = 0
+    total_mem = 0
+    
+    for node in nodes:
+        if node.is_online:
+            total_mem_used += node.total_memory_used
+            total_mem += node.total_memory
+            total_util += sum(gpu.utilization for gpu in node.gpus)
+    
+    avg_util = total_util / total_gpus if total_gpus > 0 else 0
+    avg_mem = (total_mem_used / total_mem * 100) if total_mem > 0 else 0
+    
+    # Create header text
+    header = Text()
+    header.append("🖥️  GPU Cluster Monitor", style="bold bright_white")
+    header.append(f"  │  🕐 {now}", style="white")
+    header.append(f"  │  🔄 {refresh_interval}s", style="dim")
+    header.append(f"  │  📊 {online_nodes} nodes", style="green")
+    if offline_nodes > 0:
+        header.append(f" ({offline_nodes} offline)", style="red")
+    
+    util_color = get_utilization_color(avg_util)
+    mem_color = get_memory_color(avg_mem)
+    header.append(f"  │  ⚡ {avg_util:.0f}%", style=f"bold {util_color}")
+    header.append(f"  │  💾 {format_memory(total_mem_used)}/{format_memory(total_mem)}", style=f"bold {mem_color}")
+    
+    # Create table
+    table = Table(
+        box=box.SIMPLE_HEAD,
+        show_header=True,
+        header_style="bold cyan",
+        expand=True,
+        padding=(0, 1),
+    )
+    
+    table.add_column("Node", style="bold white", no_wrap=True, min_width=10)
+    table.add_column("GPU", justify="center", min_width=3)
+    table.add_column("Util", justify="right", min_width=4)
+    table.add_column("Util Bar", min_width=12)
+    table.add_column("Memory", justify="right", min_width=12)
+    table.add_column("Mem Bar", min_width=12)
+    table.add_column("Mem %", justify="right", min_width=5)
+    
+    for node in nodes:
+        if not node.is_online:
+            table.add_row(
+                Text(f"✗ {node.hostname}", style="red"),
+                "-", "-", "-",
+                Text(node.error[:30] if node.error else "Offline", style="dim red"),
+                "-", "-"
+            )
+            continue
+        
+        if not node.gpus:
+            table.add_row(
+                Text(f"? {node.hostname}", style="yellow"),
+                "-", "-", "-",
+                Text("No GPUs", style="dim yellow"),
+                "-", "-"
+            )
+            continue
+        
+        # First GPU row includes node name
+        for i, gpu in enumerate(node.gpus):
+            util_color = get_utilization_color(gpu.utilization)
+            mem_color = get_memory_color(gpu.memory_percent)
+            
+            node_name = ""
+            if i == 0:
+                # Determine status icon
+                avg = node.avg_utilization
+                if avg > 80:
+                    icon = "🔥"
+                elif avg > 50:
+                    icon = "⚡"
+                else:
+                    icon = "✓"
+                node_name = f"{icon} {node.hostname}"
+            
+            table.add_row(
+                node_name,
+                str(gpu.index),
+                Text(f"{gpu.utilization}%", style=f"bold {util_color}"),
+                Text(create_compact_bar(gpu.utilization, 10), style=util_color),
+                f"{format_memory(gpu.memory_used)}/{format_memory(gpu.memory_total)}",
+                Text(create_compact_bar(gpu.memory_percent, 10), style=mem_color),
+                Text(f"{gpu.memory_percent:.0f}%", style=f"bold {mem_color}"),
+            )
+    
+    footer = Text("\n  Press Ctrl+C to exit", style="dim italic")
+    
+    return Group(header, Text(""), table, footer)
+
+
 class DashboardDisplay:
     """Manages the live dashboard display."""
     
-    def __init__(self, refresh_interval: float = 2.0):
+    def __init__(self, refresh_interval: float = 2.0, compact: bool = False, fullscreen: bool = True):
         self.console = Console()
         self.refresh_interval = refresh_interval
+        self.compact = compact
+        self.fullscreen = fullscreen
         self.live: Optional[Live] = None
     
     def start(self):
@@ -223,7 +335,7 @@ class DashboardDisplay:
         self.live = Live(
             console=self.console,
             refresh_per_second=4,
-            screen=True,
+            screen=self.fullscreen,
         )
         self.live.start()
     
@@ -235,7 +347,10 @@ class DashboardDisplay:
     def update(self, nodes: List[NodeStatus]):
         """Update the display with new node data."""
         if self.live:
-            dashboard = create_dashboard(nodes, self.refresh_interval)
+            if self.compact:
+                dashboard = create_compact_table(nodes, self.refresh_interval)
+            else:
+                dashboard = create_dashboard(nodes, self.refresh_interval)
             self.live.update(dashboard)
     
     def __enter__(self):

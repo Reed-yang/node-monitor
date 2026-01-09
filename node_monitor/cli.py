@@ -37,8 +37,20 @@ console = Console()
     default=8,
     help="Maximum parallel SSH connections (default: 8)",
 )
+@click.option(
+    "--compact", "-c",
+    is_flag=True,
+    default=False,
+    help="Use compact table view (fits more nodes on screen)",
+)
+@click.option(
+    "--no-fullscreen", "-F",
+    is_flag=True,
+    default=False,
+    help="Disable fullscreen mode (allows terminal scrolling)",
+)
 @click.version_option(version=__version__, prog_name="node-monitor")
-def main(nodes: Optional[str], interval: float, workers: int):
+def main(nodes: Optional[str], interval: float, workers: int, compact: bool, no_fullscreen: bool):
     """
     🖥️  GPU Cluster Monitor - Monitor GPU resources across Slurm nodes.
     
@@ -50,6 +62,8 @@ def main(nodes: Optional[str], interval: float, workers: int):
         node-monitor                     # Auto-detect Slurm nodes
         node-monitor -n visko-1,visko-2  # Monitor specific nodes
         node-monitor -i 5                # Refresh every 5 seconds
+        node-monitor -c                  # Compact table view
+        node-monitor -c -F               # Compact + scrollable
     """
     # Determine nodes to monitor
     if nodes:
@@ -69,7 +83,14 @@ def main(nodes: Optional[str], interval: float, workers: int):
         console.print("[red]✗ No nodes to monitor[/]")
         sys.exit(1)
     
-    console.print(f"[cyan]🚀 Starting monitor (refresh every {interval}s)...[/]")
+    mode_info = []
+    if compact:
+        mode_info.append("compact")
+    if no_fullscreen:
+        mode_info.append("scrollable")
+    mode_str = f" ({', '.join(mode_info)})" if mode_info else ""
+    
+    console.print(f"[cyan]🚀 Starting monitor{mode_str} (refresh every {interval}s)...[/]")
     time.sleep(1)  # Brief pause before entering full-screen mode
     
     # Set up graceful shutdown
@@ -84,7 +105,11 @@ def main(nodes: Optional[str], interval: float, workers: int):
     
     # Main monitoring loop
     try:
-        with DashboardDisplay(refresh_interval=interval) as display:
+        with DashboardDisplay(
+            refresh_interval=interval,
+            compact=compact,
+            fullscreen=not no_fullscreen,
+        ) as display:
             while running:
                 # Query all nodes in parallel
                 statuses = query_all_nodes(node_list, max_workers=workers)
@@ -102,3 +127,4 @@ def main(nodes: Optional[str], interval: float, workers: int):
 
 if __name__ == "__main__":
     main()
+
