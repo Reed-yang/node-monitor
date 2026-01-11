@@ -73,6 +73,15 @@ node-monitor -i 5
 node-monitor -c -F
 ```
 
+### Debug Mode
+
+```bash
+# Enable debug mode for verbose SSH error output (useful for troubleshooting SSH issues)
+node-monitor -d
+# or combine with other options
+node-monitor -c -d
+```
+
 ### All Options
 
 ```
@@ -85,6 +94,7 @@ Options:
   -c, --compact          Use compact table view (fits more nodes)
   -F, --no-fullscreen    Disable fullscreen mode (allows scrolling)
   -p, --processes        Show GPU processes with user info
+  -d, --debug            Enable debug mode with verbose SSH error output
   --version              Show the version and exit.
   --help                 Show this message and exit.
 ```
@@ -163,6 +173,12 @@ Shows GPU processes grouped by user below the table:
 - Shows GPU processes with user info
 - Processes grouped by user with GPU IDs and memory
 - Queries via `nvidia-smi --query-compute-apps`
+
+#### 🔧 Debug Mode (`HEAD`)
+- Added `-d / --debug` flag for SSH troubleshooting
+- Verbose SSH debug output with `-v` flag
+- Detailed error messages including STDERR/STDOUT
+- Shows timeout duration and exception types
 
 ## 📄 License
 

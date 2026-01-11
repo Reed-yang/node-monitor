@@ -55,8 +55,14 @@ console = Console()
     default=False,
     help="Show GPU processes with user info (requires -c compact mode)",
 )
+@click.option(
+    "--debug", "-d",
+    is_flag=True,
+    default=False,
+    help="Enable debug mode with verbose SSH error output",
+)
 @click.version_option(version=__version__, prog_name="node-monitor")
-def main(nodes: Optional[str], interval: float, workers: int, compact: bool, no_fullscreen: bool, processes: bool):
+def main(nodes: Optional[str], interval: float, workers: int, compact: bool, no_fullscreen: bool, processes: bool, debug: bool):
     """
     🖥️  GPU Cluster Monitor - Monitor GPU resources across Slurm nodes.
     
@@ -101,6 +107,8 @@ def main(nodes: Optional[str], interval: float, workers: int, compact: bool, no_
         mode_info.append("processes")
     if no_fullscreen:
         mode_info.append("scrollable")
+    if debug:
+        mode_info.append("debug")
     mode_str = f" ({', '.join(mode_info)})" if mode_info else ""
     
     console.print(f"[cyan]🚀 Starting monitor{mode_str} (refresh every {interval}s)...[/]")
@@ -126,7 +134,13 @@ def main(nodes: Optional[str], interval: float, workers: int, compact: bool, no_
         ) as display:
             while running:
                 # Query all nodes in parallel
-                statuses = query_all_nodes(node_list, max_workers=workers, show_processes=processes)
+                statuses = query_all_nodes(node_list, max_workers=workers, show_processes=processes, debug=debug)
+                
+                # Print debug info for nodes with errors
+                if debug:
+                    for status in statuses:
+                        if status.error:
+                            console.print(f"[red]🔧 DEBUG [{status.hostname}]: {status.error}[/]")
                 
                 # Update display
                 display.update(statuses)
