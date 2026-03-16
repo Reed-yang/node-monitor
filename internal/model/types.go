@@ -1,6 +1,9 @@
 package model
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // GPUProcess represents a running process on a GPU.
 type GPUProcess struct {
@@ -17,7 +20,24 @@ type GPUInfo struct {
 	Utilization int // 0-100
 	MemoryUsed  int // MiB
 	MemoryTotal int // MiB
+	Name        string // GPU model name (e.g., "NVIDIA A100-SXM4-80GB")
 	Processes   []GPUProcess
+}
+
+// ShortName returns abbreviated GPU model name (e.g., "A100").
+func (g GPUInfo) ShortName() string {
+	name := g.Name
+	// Common patterns: "NVIDIA A100-SXM4-80GB" -> "A100", "Tesla V100-SXM2-32GB" -> "V100"
+	for _, prefix := range []string{"NVIDIA ", "Tesla "} {
+		name = strings.TrimPrefix(name, prefix)
+	}
+	if idx := strings.IndexAny(name, "- "); idx > 0 {
+		name = name[:idx]
+	}
+	if name == "" {
+		return "GPU"
+	}
+	return name
 }
 
 // MemoryPercent returns memory usage as a percentage.
@@ -49,6 +69,30 @@ func (n NodeStatus) AvgUtilization() float64 {
 		total += g.Utilization
 	}
 	return float64(total) / float64(len(n.GPUs))
+}
+
+// GPUModelSummary returns e.g. "8×A100"
+func (n NodeStatus) GPUModelSummary() string {
+	if len(n.GPUs) == 0 {
+		return ""
+	}
+	name := n.GPUs[0].ShortName()
+	return fmt.Sprintf("%d×%s", len(n.GPUs), name)
+}
+
+// ActiveUsers returns unique usernames with GPU processes.
+func (n NodeStatus) ActiveUsers() []string {
+	seen := make(map[string]bool)
+	var users []string
+	for _, g := range n.GPUs {
+		for _, p := range g.Processes {
+			if !seen[p.User] {
+				seen[p.User] = true
+				users = append(users, p.User)
+			}
+		}
+	}
+	return users
 }
 
 func (n NodeStatus) AllProcesses() []GPUProcess {

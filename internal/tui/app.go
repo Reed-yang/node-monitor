@@ -11,20 +11,20 @@ import (
 	"github.com/siyuan/node-monitor/internal/tui/components"
 )
 
-// View modes
+// ViewMode kept for API compatibility but only one mode now.
 type ViewMode int
 
 const (
-	ViewPanel ViewMode = iota
-	ViewCompact
+	ViewPanel   ViewMode = iota
+	ViewCompact          // kept for backward compat, ignored
 )
 
-// App state
-type AppView int
+// Bottom panel state
+type BottomPanel int
 
 const (
-	AppList AppView = iota
-	AppDetail
+	PanelProcesses BottomPanel = iota
+	PanelDetail
 )
 
 // Messages
@@ -44,6 +44,18 @@ const (
 	SortMemory
 )
 
+func (s SortMode) String() string {
+	switch s {
+	case SortName:
+		return "name"
+	case SortUtil:
+		return "util"
+	case SortMemory:
+		return "memory"
+	}
+	return ""
+}
+
 // Model is the Bubble Tea model.
 type Model struct {
 	// Data
@@ -61,8 +73,8 @@ type Model struct {
 	showProcesses bool
 
 	// UI state
-	viewMode    ViewMode
-	appView     AppView
+	viewMode    ViewMode // unused, kept for API
+	bottomPanel BottomPanel
 	selectedIdx int
 	sortMode    SortMode
 	showHelp    bool
@@ -75,6 +87,16 @@ type Model struct {
 	groups       map[string][]string
 	groupNames   []string
 	currentGroup int
+
+	// Click regions (rebuilt each render)
+	clickRegions []ClickRegion
+}
+
+// ClickRegion defines a clickable area.
+type ClickRegion struct {
+	X1, Y1, X2, Y2 int
+	Action          string
+	NodeIndex       int
 }
 
 // NewModel creates a new TUI model.
@@ -103,7 +125,7 @@ func NewModel(
 		debug:         debug,
 		showProcesses: showProcesses,
 		viewMode:      viewMode,
-		appView:       AppList,
+		bottomPanel:   PanelProcesses,
 		selectedIdx:   0,
 		currentGroup:  -1,
 		groups:        groups,
@@ -127,6 +149,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
 
 	case tickMsg:
 		return m, tea.Batch(m.queryNodes(), m.tick())
@@ -156,40 +181,80 @@ func (m Model) View() string {
 		return "Loading..."
 	}
 
-	var view string
-
-	header := components.RenderHeader(m.nodes, m.interval.Seconds(), m.width)
-
-	switch m.appView {
-	case AppList:
-		var content string
-		switch m.viewMode {
-		case ViewPanel:
-			content = components.RenderPanelView(m.nodes, m.selectedIdx, m.width)
-		case ViewCompact:
-			content = components.RenderCompactView(m.nodes, m.selectedIdx, m.width, m.showProcesses)
-		}
-
-		footer := ""
-		if m.searching {
-			footer = "\n  Search: " + m.searchQuery + "█"
-		}
-
-		view = header + "\n\n" + content + footer
-
-	case AppDetail:
-		if m.detailNode != nil {
-			view = header + "\n\n" + components.RenderNodeDetail(*m.detailNode, m.detailSys, m.width)
-		} else {
-			view = header + "\n\n  Loading detail..."
-		}
-	}
-
 	if m.showHelp {
 		return components.RenderHelp(m.width, m.height)
 	}
 
-	return view
+	innerWidth := m.width - 2 // outer frame borders
+
+	// Header
+	header := components.RenderHeader(m.nodes, m.interval.Seconds(), innerWidth)
+
+	// Node grid
+	nodeGrid := components.RenderNodeGrid(m.nodes, m.selectedIdx, innerWidth)
+
+	// Bottom panel
+	var bottomTitle string
+	var bottomContent string
+
+	if m.bottomPanel == PanelDetail && m.detailNode != nil {
+		bottomTitle = m.detailNode.Hostname + " Detail"
+		bottomContent = components.RenderNodeDetail(*m.detailNode, m.detailSys, innerWidth)
+	} else if m.showProcesses {
+		bottomTitle = "Processes"
+		// Calculate available rows for process table
+		gridLines := strings.Count(nodeGrid, "\n") + 1
+		availRows := m.height - gridLines - 8 // header + divider + borders + footer
+		if availRows < 3 {
+			availRows = 3
+		}
+		bottomContent = components.RenderProcessTable(m.nodes, innerWidth, availRows)
+	}
+
+	// Assemble body
+	var bodyLines []string
+
+	// Add node grid lines
+	for _, line := range strings.Split(nodeGrid, "\n") {
+		bodyLines = append(bodyLines, " "+line)
+	}
+
+	// Divider + bottom panel
+	if bottomContent != "" {
+		divider := components.RenderDivider(bottomTitle, m.width)
+		// Strip the side borders from divider since outer frame adds them
+		bodyLines = append(bodyLines, "")
+		// We need to handle the divider specially — it replaces a full row in the frame
+		_ = divider
+		divLine := buildDivider(bottomTitle, innerWidth)
+		bodyLines = append(bodyLines, divLine)
+
+		for _, line := range strings.Split(bottomContent, "\n") {
+			bodyLines = append(bodyLines, " "+line)
+		}
+	}
+
+	// Search bar
+	if m.searching {
+		searchLine := " Search: " + m.searchQuery + "█"
+		bodyLines = append(bodyLines, searchLine)
+	}
+
+	body := strings.Join(bodyLines, "\n")
+
+	return components.RenderOuterFrame(header, body, m.width, m.height)
+}
+
+func buildDivider(title string, width int) string {
+	if title == "" {
+		return strings.Repeat("─", width)
+	}
+	prefix := "─┤ " + title + " ├"
+	remaining := width - len(prefix)
+	if remaining < 0 {
+		remaining = 0
+	}
+	return prefix + strings.Repeat("─", remaining)
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -217,8 +282,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "q", "ctrl+c":
-		if m.appView == AppDetail {
-			m.appView = AppList
+		if m.bottomPanel == PanelDetail {
+			m.bottomPanel = PanelProcesses
 			m.detailNode = nil
 			m.detailSys = nil
 			return m, nil
@@ -230,8 +295,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.showHelp = false
 			return m, nil
 		}
-		if m.appView == AppDetail {
-			m.appView = AppList
+		if m.bottomPanel == PanelDetail {
+			m.bottomPanel = PanelProcesses
 			m.detailNode = nil
 			m.detailSys = nil
 			return m, nil
@@ -239,22 +304,22 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "up", "k":
-		if m.appView == AppList && m.selectedIdx > 0 {
+		if m.selectedIdx > 0 {
 			m.selectedIdx--
 		}
 		return m, nil
 
 	case "down", "j":
-		if m.appView == AppList && m.selectedIdx < len(m.nodes)-1 {
+		if m.selectedIdx < len(m.nodes)-1 {
 			m.selectedIdx++
 		}
 		return m, nil
 
 	case "enter":
-		if m.appView == AppList && len(m.nodes) > 0 && m.selectedIdx < len(m.nodes) {
+		if len(m.nodes) > 0 && m.selectedIdx < len(m.nodes) {
 			node := m.nodes[m.selectedIdx]
 			if node.IsOnline() {
-				m.appView = AppDetail
+				m.bottomPanel = PanelDetail
 				m.detailNode = nil
 				m.detailSys = nil
 				return m, m.queryDetail(node.Hostname)
@@ -263,15 +328,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "tab":
-		if m.viewMode == ViewPanel {
-			m.viewMode = ViewCompact
-		} else {
-			m.viewMode = ViewPanel
-		}
+		// Could toggle focus between grid and bottom panel
+		// For now, no-op
 		return m, nil
 
 	case "p":
 		m.showProcesses = !m.showProcesses
+		if !m.showProcesses {
+			m.bottomPanel = PanelProcesses
+		}
 		return m, nil
 
 	case "s":
@@ -302,6 +367,62 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "?":
 		m.showHelp = !m.showHelp
 		return m, nil
+	}
+
+	return m, nil
+}
+
+func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if msg.Action != tea.MouseActionPress {
+		return m, nil
+	}
+
+	// Calculate which node card was clicked based on grid layout
+	// The node grid starts at row 2 (after header border + separator)
+	// Each card is approximately 6 rows high (border + 4 content + border)
+	if len(m.nodes) == 0 {
+		return m, nil
+	}
+
+	innerWidth := m.width - 2
+	minCardWidth := 40
+	numCols := innerWidth / minCardWidth
+	if numCols < 1 {
+		numCols = 1
+	}
+	if numCols > len(m.nodes) {
+		numCols = len(m.nodes)
+	}
+	cardWidth := innerWidth / numCols
+
+	// Approximate card height (border top + 3 content lines + border bottom = 5)
+	cardHeight := 6
+	gridStartY := 2 // after outer frame top border + separator line
+
+	clickX := msg.X - 1 // adjust for outer frame left border
+	clickY := msg.Y - gridStartY
+
+	if clickX < 0 || clickY < 0 {
+		return m, nil
+	}
+
+	col := clickX / cardWidth
+	row := clickY / cardHeight
+
+	if col >= numCols {
+		col = numCols - 1
+	}
+
+	nodeIdx := row*numCols + col
+	if nodeIdx >= 0 && nodeIdx < len(m.nodes) {
+		m.selectedIdx = nodeIdx
+		node := m.nodes[nodeIdx]
+		if node.IsOnline() {
+			m.bottomPanel = PanelDetail
+			m.detailNode = nil
+			m.detailSys = nil
+			return m, m.queryDetail(node.Hostname)
+		}
 	}
 
 	return m, nil

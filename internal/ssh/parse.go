@@ -33,11 +33,16 @@ func parseGPUOutput(output string) []model.GPUInfo {
 		if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
 			continue
 		}
+		name := ""
+		if len(parts) >= 5 {
+			name = strings.TrimSpace(parts[4])
+		}
 		gpus = append(gpus, model.GPUInfo{
 			Index:       idx,
 			Utilization: util,
 			MemoryUsed:  memUsed,
 			MemoryTotal: memTotal,
+			Name:        name,
 		})
 	}
 	return gpus
@@ -248,7 +253,7 @@ func parseSystemInfo(section string) *model.SystemInfo {
 
 // ListViewCommand returns the nvidia-smi command for list view queries.
 func ListViewCommand() string {
-	return "nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits"
+	return "nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total,name --format=csv,noheader,nounits"
 }
 
 // DetailViewCommand returns the batched command for detail view queries.
