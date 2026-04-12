@@ -6,18 +6,18 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Dracula-inspired color palette
+// btop++-inspired color palette (muted, layered)
 var (
-	ColorFg        = lipgloss.Color("#f8f8f2")
-	ColorDim       = lipgloss.Color("#6272a4")
-	ColorBorder    = lipgloss.Color("#44475a")
-	ColorMeterBg   = lipgloss.Color("#44475a")
-	ColorAccent    = lipgloss.Color("#8be9fd")
-	ColorGreen     = lipgloss.Color("#50fa7b")
-	ColorYellow    = lipgloss.Color("#f1fa8c")
-	ColorOrange    = lipgloss.Color("#ffb86c")
-	ColorRed       = lipgloss.Color("#ff5555")
-	ColorSelection = lipgloss.Color("#f8f8f2")
+	ColorFg        = lipgloss.Color("#c9d1d9")
+	ColorDim       = lipgloss.Color("#484f58")
+	ColorBorder    = lipgloss.Color("#30363d")
+	ColorMeterBg   = lipgloss.Color("#21262d")
+	ColorAccent    = lipgloss.Color("#388bfd")
+	ColorGreen     = lipgloss.Color("#2ea043")
+	ColorYellow    = lipgloss.Color("#d29922")
+	ColorOrange    = lipgloss.Color("#cf6e2a")
+	ColorRed       = lipgloss.Color("#da3633")
+	ColorSelection = lipgloss.Color("#e6edf3")
 )
 
 // Gradient defines a 3-color interpolation (start → mid → end).
@@ -29,14 +29,14 @@ type Gradient struct {
 
 var (
 	UtilGradient = Gradient{
-		Start: [3]int{0x50, 0xfa, 0x7b}, // green
-		Mid:   [3]int{0xf1, 0xfa, 0x8c}, // yellow
-		End:   [3]int{0xff, 0x55, 0x55}, // red
+		Start: [3]int{0x2e, 0xa0, 0x43}, // green
+		Mid:   [3]int{0xd2, 0x99, 0x22}, // amber
+		End:   [3]int{0xda, 0x36, 0x33}, // red
 	}
 	MemGradient = Gradient{
-		Start: [3]int{0x8b, 0xe9, 0xfd}, // cyan
-		Mid:   [3]int{0xf1, 0xfa, 0x8c}, // yellow
-		End:   [3]int{0xff, 0x55, 0x55}, // red
+		Start: [3]int{0x38, 0x8b, 0xfd}, // blue
+		Mid:   [3]int{0xd2, 0x99, 0x22}, // amber
+		End:   [3]int{0xda, 0x36, 0x33}, // red
 	}
 )
 
