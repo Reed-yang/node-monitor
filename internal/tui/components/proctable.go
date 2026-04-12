@@ -118,31 +118,3 @@ func RenderProcessTable(nodes []model.NodeStatus, width int, maxRows int) string
 	return strings.Join(lines, "\n")
 }
 
-// formatGPURange formats GPU indices compactly: [0,1,2,3] -> "0-3", [0,2,5] -> "0,2,5"
-func formatGPURange(ids []int) string {
-	if len(ids) == 0 {
-		return ""
-	}
-	if len(ids) == 1 {
-		return fmt.Sprintf("%d", ids[0])
-	}
-
-	// Check if contiguous
-	contiguous := true
-	for i := 1; i < len(ids); i++ {
-		if ids[i] != ids[i-1]+1 {
-			contiguous = false
-			break
-		}
-	}
-
-	if contiguous {
-		return fmt.Sprintf("%d-%d", ids[0], ids[len(ids)-1])
-	}
-
-	parts := make([]string, len(ids))
-	for i, id := range ids {
-		parts[i] = fmt.Sprintf("%d", id)
-	}
-	return strings.Join(parts, ",")
-}

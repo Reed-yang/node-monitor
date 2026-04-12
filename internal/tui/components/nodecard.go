@@ -9,7 +9,7 @@ import (
 )
 
 // RenderNodeGrid renders all nodes as a grid of condensed cards.
-func RenderNodeGrid(nodes []model.NodeStatus, selectedIdx int, width int) string {
+func RenderNodeGrid(nodes []model.NodeStatus, selectedIdx int, width int, displayNames map[string]string, expanded bool) string {
 	minCardWidth := 40
 	numCols := width / minCardWidth
 	if numCols < 1 {
@@ -25,7 +25,11 @@ func RenderNodeGrid(nodes []model.NodeStatus, selectedIdx int, width int) string
 
 	var cards []string
 	for i, node := range nodes {
-		cards = append(cards, renderCondensedCard(node, cardWidth, i == selectedIdx))
+		name := node.Hostname
+		if dn, ok := displayNames[node.Hostname]; ok {
+			name = dn
+		}
+		cards = append(cards, renderCondensedCard(node, cardWidth, i == selectedIdx, name, expanded))
 	}
 
 	// Arrange in rows
@@ -42,23 +46,21 @@ func RenderNodeGrid(nodes []model.NodeStatus, selectedIdx int, width int) string
 	return strings.Join(rows, "\n")
 }
 
-// renderCondensedCard renders a compact node card (4 lines content).
-func renderCondensedCard(node model.NodeStatus, width int, selected bool) string {
+// renderCondensedCard renders a compact node card with optional process lines.
+func renderCondensedCard(node model.NodeStatus, width int, selected bool, displayName string, expanded bool) string {
 	innerWidth := width - 4 // border + padding
-	barWidth := innerWidth - 12 // label + pct
+	barWidth := innerWidth - 12
 	if barWidth < 10 {
 		barWidth = 10
 	}
 
 	borderColor := ColorBorder
 
-	// Build title
-	var titleIcon, titleName string
+	var titleIcon string
 	var contentLines []string
 
 	if !node.IsOnline() {
 		titleIcon = "✗"
-		titleName = node.Hostname
 		borderColor = ColorRed
 
 		errMsg := "Offline"
@@ -75,7 +77,6 @@ func renderCondensedCard(node model.NodeStatus, width int, selected bool) string
 		)
 	} else if len(node.GPUs) == 0 {
 		titleIcon = "?"
-		titleName = node.Hostname
 		borderColor = ColorYellow
 		contentLines = append(contentLines,
 			lipgloss.NewStyle().Foreground(ColorDim).Render(" No GPUs detected"),
@@ -85,7 +86,6 @@ func renderCondensedCard(node model.NodeStatus, width int, selected bool) string
 	} else {
 		avgUtil := node.AvgUtilization()
 		titleIcon = NodeStatusIcon(avgUtil)
-		titleName = node.Hostname
 		borderColor = NodeBorderColor(avgUtil)
 
 		// Line 1: Aggregate utilization bar
@@ -100,85 +100,193 @@ func renderCondensedCard(node model.NodeStatus, width int, selected bool) string
 			memPct = float64(node.TotalMemoryUsed()) / float64(node.TotalMemory()) * 100
 		}
 		memBar := RenderGradientBar(memPct, barWidth, MemGradient)
-		memVal := lipgloss.NewStyle().Bold(true).Foreground(MemColor(memPct)).Render(
-			fmt.Sprintf("%s", model.FormatMemory(node.TotalMemoryUsed())),
-		)
+		memVal := lipgloss.NewStyle().Bold(true).Foreground(MemColor(memPct)).Render(model.FormatMemory(node.TotalMemoryUsed()))
 		memLabel := lipgloss.NewStyle().Foreground(ColorDim).Render("Mem  ")
 		contentLines = append(contentLines, memLabel+memBar+" "+memVal)
 
-		// Line 3: GPU heatmap + model + users
+		// Line 3: GPU heatmap + model + idle indicator
 		heatmap := RenderGPUHeatmap(node.GPUs)
 		gpuLabel := lipgloss.NewStyle().Foreground(ColorDim).Render("GPU  ")
 		modelStr := lipgloss.NewStyle().Foreground(ColorDim).Render(" " + node.GPUModelSummary())
 
-		userStr := ""
 		users := node.ActiveUsers()
-		if len(users) > 0 {
-			joined := strings.Join(users, ",")
-			maxLen := innerWidth - len(node.GPUModelSummary()) - len(node.GPUs) - 10
-			if maxLen < 0 {
-				maxLen = 0
-			}
-			if len(joined) > maxLen {
-				if maxLen > 3 {
-					joined = joined[:maxLen-2] + ".."
-				} else {
-					joined = ""
-				}
-			}
-			if joined != "" {
-				userStr = lipgloss.NewStyle().Foreground(ColorAccent).Render(" " + joined)
-			}
+		if len(users) == 0 {
+			idleStr := lipgloss.NewStyle().Foreground(ColorBorder).Italic(true).Render("  idle")
+			contentLines = append(contentLines, gpuLabel+heatmap+modelStr+idleStr)
+		} else {
+			contentLines = append(contentLines, gpuLabel+heatmap+modelStr)
 		}
-		contentLines = append(contentLines, gpuLabel+heatmap+modelStr+userStr)
+
+		// Process lines (only when expanded and there are processes)
+		if expanded && len(users) > 0 {
+			procLines := renderCardProcesses(node, innerWidth)
+			contentLines = append(contentLines, procLines...)
+		}
 	}
 
 	content := strings.Join(contentLines, "\n")
 
-	// Build the card with btop-style title in border
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(borderColor)
+	// Build card with selection override
+	titleColor := borderColor
 	if selected {
 		borderColor = ColorSelection
-		titleStyle = lipgloss.NewStyle().Bold(true).Foreground(ColorSelection)
+		titleColor = ColorSelection
 	}
-	title := titleStyle.Render(titleIcon + " " + titleName)
 
-	// Card border
+	titleText := lipgloss.NewStyle().Bold(true).Foreground(titleColor).Render(titleIcon + " " + displayName)
+
 	style := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
 		Padding(0, 1).
 		Width(width)
 
-	// Render with title embedded
 	rendered := style.Render(content)
 
-	// Replace top border center with title
+	// Replace top border with embedded title
 	lines := strings.Split(rendered, "\n")
 	if len(lines) > 0 {
-		lines[0] = embedTitle(lines[0], title, borderColor, width)
+		lines[0] = embedTitle(lines[0], titleText, borderColor, width)
 	}
 
 	return strings.Join(lines, "\n")
 }
 
-// embedTitle replaces the center of a top border line with a title.
-// Input: "╭────────────────────╮"
-// Output: "╭─┤ hostname ⚡ ├────╮"
-func embedTitle(topLine, title string, borderColor lipgloss.Color, width int) string {
-	left := lipgloss.NewStyle().Foreground(borderColor).Render("╭─┤ ")
-	right := lipgloss.NewStyle().Foreground(borderColor).Render(" ├")
+// renderCardProcesses renders per-user process lines for a card.
+func renderCardProcesses(node model.NodeStatus, innerWidth int) []string {
+	type userAgg struct {
+		User string
+		GPUs []int
+		Mem  int
+		Cmd  string
+	}
 
-	// Calculate remaining border to fill
-	titleRendered := left + title + right
-	titleWidth := lipgloss.Width(titleRendered)
-	remaining := width - titleWidth - 1 // -1 for the closing ╮
+	aggMap := make(map[string]*userAgg)
+	var userOrder []string
+	for _, g := range node.GPUs {
+		for _, p := range g.Processes {
+			if a, ok := aggMap[p.User]; ok {
+				a.GPUs = appendUniqueInt(a.GPUs, p.GPUIndex)
+				a.Mem += p.MemoryMiB
+			} else {
+				aggMap[p.User] = &userAgg{
+					User: p.User,
+					GPUs: []int{p.GPUIndex},
+					Mem:  p.MemoryMiB,
+					Cmd:  p.Command,
+				}
+				userOrder = append(userOrder, p.User)
+			}
+		}
+	}
+
+	var lines []string
+	for _, user := range userOrder {
+		a := aggMap[user]
+		sortInts(a.GPUs)
+		gpuStr := formatGPURange(a.GPUs)
+
+		// Command: basename only, truncate
+		cmd := baseName(a.Cmd)
+		maxCmd := innerWidth - 24
+		if maxCmd < 6 {
+			maxCmd = 6
+		}
+		if len(cmd) > maxCmd {
+			cmd = cmd[:maxCmd-2] + ".."
+		}
+
+		line := lipgloss.NewStyle().Foreground(ColorAccent).Render(fmt.Sprintf("%-5s", truncStr(user, 5))) + " " +
+			lipgloss.NewStyle().Foreground(ColorGreen).Render(fmt.Sprintf("%-3s", gpuStr)) + " " +
+			lipgloss.NewStyle().Foreground(ColorFg).Render(fmt.Sprintf("%4s", model.FormatMemory(a.Mem))) + " " +
+			lipgloss.NewStyle().Foreground(ColorDim).Render(cmd)
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+// embedTitle replaces the top border line with ╭─┤ title ├───╮.
+func embedTitle(topLine, title string, borderColor lipgloss.Color, targetWidth int) string {
+	bc := func(s string) string {
+		return lipgloss.NewStyle().Foreground(borderColor).Render(s)
+	}
+
+	prefix := bc("╭─┤ ")
+	suffix := bc(" ├")
+
+	titleRendered := prefix + title + suffix
+	titleVisualWidth := lipgloss.Width(titleRendered)
+
+	// Fill remaining width, accounting for closing ╮
+	remaining := targetWidth - titleVisualWidth - 1
 	if remaining < 0 {
 		remaining = 0
 	}
 
-	fill := lipgloss.NewStyle().Foreground(borderColor).Render(strings.Repeat("─", remaining))
-	close := lipgloss.NewStyle().Foreground(borderColor).Render("╮")
+	return titleRendered + bc(strings.Repeat("─", remaining)) + bc("╮")
+}
 
-	return titleRendered + fill + close
+// Helper functions
+
+func appendUniqueInt(slice []int, val int) []int {
+	for _, v := range slice {
+		if v == val {
+			return slice
+		}
+	}
+	return append(slice, val)
+}
+
+func sortInts(a []int) {
+	for i := 1; i < len(a); i++ {
+		for j := i; j > 0 && a[j-1] > a[j]; j-- {
+			a[j-1], a[j] = a[j], a[j-1]
+		}
+	}
+}
+
+func truncStr(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max]
+}
+
+func baseName(cmd string) string {
+	parts := strings.Fields(cmd)
+	if len(parts) == 0 {
+		return cmd
+	}
+	exe := parts[0]
+	idx := strings.LastIndex(exe, "/")
+	if idx >= 0 {
+		exe = exe[idx+1:]
+	}
+	parts[0] = exe
+	return strings.Join(parts, " ")
+}
+
+// formatGPURange formats GPU indices compactly: [0,1,2,3] -> "0-3", [0,2,5] -> "0,2,5"
+func formatGPURange(ids []int) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	if len(ids) == 1 {
+		return fmt.Sprintf("%d", ids[0])
+	}
+	contiguous := true
+	for i := 1; i < len(ids); i++ {
+		if ids[i] != ids[i-1]+1 {
+			contiguous = false
+			break
+		}
+	}
+	if contiguous {
+		return fmt.Sprintf("%d-%d", ids[0], ids[len(ids)-1])
+	}
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = fmt.Sprintf("%d", id)
+	}
+	return strings.Join(parts, ",")
 }
