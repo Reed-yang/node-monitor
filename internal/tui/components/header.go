@@ -86,12 +86,21 @@ func RenderHeader(nodes []model.NodeStatus, interval float64, width int) string 
 }
 
 // RenderOuterFrame wraps content in a btop-style outer frame with header in top border.
+// Output is exactly `height` lines tall, each exactly `width` chars wide.
 func RenderOuterFrame(header, body string, width, height int) string {
+	if width < 4 {
+		width = 4
+	}
+	if height < 3 {
+		height = 3
+	}
+
 	bc := ColorBorder
+	bs := lipgloss.NewStyle().Foreground(bc)
 
 	// Top border with embedded header
-	topLeft := lipgloss.NewStyle().Foreground(bc).Render("╭─┤ ")
-	topRight := lipgloss.NewStyle().Foreground(bc).Render(" ├")
+	topLeft := bs.Render("╭─┤ ")
+	topRight := bs.Render(" ├")
 	headerRendered := topLeft + header + topRight
 
 	headerWidth := lipgloss.Width(headerRendered)
@@ -99,28 +108,42 @@ func RenderOuterFrame(header, body string, width, height int) string {
 	if topFill < 0 {
 		topFill = 0
 	}
-	topLine := headerRendered +
-		lipgloss.NewStyle().Foreground(bc).Render(strings.Repeat("─", topFill)) +
-		lipgloss.NewStyle().Foreground(bc).Render("╮")
+	topLine := headerRendered + bs.Render(strings.Repeat("─", topFill)) + bs.Render("╮")
 
 	// Bottom border
-	bottomLine := lipgloss.NewStyle().Foreground(bc).Render("╰" + strings.Repeat("─", width-2) + "╯")
+	innerDash := width - 2
+	if innerDash < 0 {
+		innerDash = 0
+	}
+	bottomLine := bs.Render("╰" + strings.Repeat("─", innerDash) + "╯")
 
-	// Side borders for body
+	// Side borders
+	leftBar := bs.Render("│")
+	rightBar := bs.Render("│")
+
+	// Body lines — truncate or pad to fit exactly (height - 2) lines
 	bodyLines := strings.Split(body, "\n")
-	var framedLines []string
-	framedLines = append(framedLines, topLine)
+	availableLines := height - 2
+	if len(bodyLines) > availableLines {
+		bodyLines = bodyLines[:availableLines]
+	}
 
-	leftBar := lipgloss.NewStyle().Foreground(bc).Render("│")
-	rightBar := lipgloss.NewStyle().Foreground(bc).Render("│")
+	framedLines := make([]string, 0, height)
+	framedLines = append(framedLines, topLine)
 
 	for _, line := range bodyLines {
 		lineWidth := lipgloss.Width(line)
-		padding := width - lineWidth - 2 // 2 for side borders
+		padding := width - lineWidth - 2
 		if padding < 0 {
 			padding = 0
 		}
 		framedLines = append(framedLines, leftBar+line+strings.Repeat(" ", padding)+rightBar)
+	}
+
+	// Pad remaining lines to fill the frame
+	emptyPad := strings.Repeat(" ", width-2)
+	for len(framedLines) < height-1 {
+		framedLines = append(framedLines, leftBar+emptyPad+rightBar)
 	}
 
 	framedLines = append(framedLines, bottomLine)

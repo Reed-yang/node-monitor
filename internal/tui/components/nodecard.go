@@ -10,17 +10,21 @@ import (
 
 // RenderNodeGrid renders all nodes as a grid of condensed cards.
 func RenderNodeGrid(nodes []model.NodeStatus, selectedIdx int, width int, displayNames map[string]string, expanded bool) string {
+	if len(nodes) == 0 {
+		return ""
+	}
 	minCardWidth := 40
 	numCols := width / minCardWidth
 	if numCols < 1 {
 		numCols = 1
 	}
-	if numCols > len(nodes) && len(nodes) > 0 {
+	if numCols > len(nodes) {
 		numCols = len(nodes)
 	}
-	cardWidth := width/numCols - 1
-	if cardWidth < minCardWidth {
-		cardWidth = minCardWidth
+	// Subtract 2 for lipgloss rounded border chars (│ on each side, outside Width)
+	cardWidth := width/numCols - 2
+	if cardWidth < minCardWidth-2 {
+		cardWidth = minCardWidth - 2
 	}
 
 	var cards []string

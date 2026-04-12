@@ -114,24 +114,51 @@ Fix approach:
 
 When the bottom panel is shown, the divider line should properly connect to the outer frame side borders using `├` and `┤` instead of floating `─` segments.
 
+### 8. Fixed-Size Frame Output (Resize Handling)
+
+`RenderOuterFrame` must produce exactly `height` lines, each exactly `width` chars wide. This prevents ghost content and scrolling artifacts when the terminal is resized.
+
+- **Truncation:** If body content exceeds `height - 2` lines (top + bottom border), truncate from bottom
+- **Padding:** If body content is fewer lines, pad with empty bordered lines (`│` + spaces + `│`)
+- **Priority:** Header and card grid always visible; detail panel truncated first when space is limited
+
+### 9. Pure Black Background
+
+Force `#000000` background on every character via ANSI reset replacement:
+
+1. Replace all `\x1b[0m` (SGR reset, emitted by lipgloss/termenv) with `\x1b[0;48;2;0;0;0m` (reset + restore bg)
+2. Prepend `\x1b[48;2;0;0;0m` at start of frame, append `\x1b[0m` at end
+3. Applied only in TUI mode via `ApplyBackground()`, static mode unaffected
+
+### 10. Grid Width Budget Fix
+
+The card grid width calculation must properly account for:
+- **Left margin:** 1 char `" "` prefix added to each body line in `View()` — grid width = `innerWidth - 1`
+- **lipgloss border overhead:** `Width(n)` excludes border chars — each card's visual width = `n + 2`
+- **Card width formula:** `cardWidth = gridWidth/numCols - 2` (not `-1`)
+
 ## File Changes
 
 | File | Action | Description |
 |------|--------|-------------|
-| `internal/tui/components/styles.go` | Update | New color palette constants, updated gradient RGB values |
+| `internal/tui/components/styles.go` | Update | New color palette, `ColorBg`, `ApplyBackground()` function |
 | `internal/tui/components/gpubar.go` | Update | Change `■` to `█` in `RenderGradientBar` |
-| `internal/tui/components/nodecard.go` | Rewrite | Add process lines, variable card height, fix `embedTitle` alignment, smart hostname |
-| `internal/tui/components/header.go` | Update | New palette colors, fix outer frame divider connection |
-| `internal/tui/components/proctable.go` | Update | New palette colors |
-| `internal/tui/components/nodedetail.go` | Update | New palette colors |
-| `internal/tui/components/help.go` | Update | New palette colors |
-| `internal/tui/app.go` | Update | Default `showProcesses=true` means cards expanded, `p` toggles card expansion, adjust mouse click regions for variable card heights |
-| `cmd/root.go` | Update | Remove `--processes` flag (processes always inline, `p` key toggles at runtime) |
+| `internal/tui/components/nodecard.go` | Rewrite | Add process lines, variable card height, fix `embedTitle` alignment, smart hostname, fix grid width calculation |
+| `internal/tui/components/hostname.go` | Create | Zero-config smart hostname truncation |
+| `internal/tui/components/hostname_test.go` | Create | 6 test cases for hostname logic |
+| `internal/tui/components/header.go` | Update | Fixed-size frame output (exact height/width), divider connection |
+| `internal/tui/components/proctable.go` | Update | Remove duplicate `formatGPURange` |
+| `internal/tui/components/nodedetail.go` | Update | Palette colors |
+| `internal/tui/components/help.go` | Update | Palette colors, `WithWhitespaceBackground(ColorBg)` |
+| `internal/tui/app.go` | Update | `ApplyBackground` in `View()`, grid width fix, detail panel refresh on tick, expand/collapse, mouse handler sync |
+| `internal/ssh/parse.go` | Update | New `ListWithProcessesCommand()` for inline process data |
+| `internal/ssh/query.go` | Update | `QueryNode` uses `ListWithProcessesCommand` + `parseDetailOutput` |
+| `cmd/root.go` | Update | Remove `--processes` flag |
 
 ## Not Changed
 
 - Overall layout architecture (outer frame, 3-zone vertical)
 - Keyboard shortcuts (same keys, same behavior)
-- SSH query logic, data model, config system
-- Detail view content (just palette update)
+- Data model, config system
+- Detail view content (just palette update + live refresh)
 - Static mode (palette update only)

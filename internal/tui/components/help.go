@@ -45,5 +45,6 @@ func RenderHelp(width, height int) string {
 		Align(lipgloss.Left)
 
 	rendered := style.Render(content)
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, rendered)
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, rendered,
+		lipgloss.WithWhitespaceBackground(ColorBg))
 }

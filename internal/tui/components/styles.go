@@ -2,12 +2,14 @@ package components
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
 
 // btop++-inspired color palette (muted, layered)
 var (
+	ColorBg        = lipgloss.Color("#000000")
 	ColorFg        = lipgloss.Color("#c9d1d9")
 	ColorDim       = lipgloss.Color("#484f58")
 	ColorBorder    = lipgloss.Color("#30363d")
@@ -19,6 +21,15 @@ var (
 	ColorRed       = lipgloss.Color("#da3633")
 	ColorSelection = lipgloss.Color("#e6edf3")
 )
+
+// ApplyBackground forces pure black background on the entire rendered output.
+// Works by replacing all ANSI SGR resets with reset+bg-restore, so the black
+// background persists through lipgloss-styled content.
+func ApplyBackground(s string) string {
+	bgRestore := "\x1b[0;48;2;0;0;0m"
+	s = strings.ReplaceAll(s, "\x1b[0m", bgRestore)
+	return "\x1b[48;2;0;0;0m" + s + "\x1b[0m"
+}
 
 // Gradient defines a 3-color interpolation (start → mid → end).
 type Gradient struct {

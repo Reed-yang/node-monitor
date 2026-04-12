@@ -187,18 +187,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	if m.width == 0 {
+	if m.width == 0 || m.height == 0 {
 		return "Loading..."
 	}
 
 	if m.showHelp {
-		return components.RenderHelp(m.width, m.height)
+		return components.ApplyBackground(components.RenderHelp(m.width, m.height))
 	}
 
 	innerWidth := m.width - 2
 
 	header := components.RenderHeader(m.nodes, m.interval.Seconds(), innerWidth)
-	nodeGrid := components.RenderNodeGrid(m.nodes, m.selectedIdx, innerWidth, m.displayNames, m.expanded)
+	gridWidth := innerWidth - 1 // 1 char left margin applied below
+	nodeGrid := components.RenderNodeGrid(m.nodes, m.selectedIdx, gridWidth, m.displayNames, m.expanded)
 
 	var bottomTitle string
 	var bottomContent string
@@ -230,7 +231,8 @@ func (m Model) View() string {
 
 	body := strings.Join(bodyLines, "\n")
 
-	return components.RenderOuterFrame(header, body, m.width, m.height)
+	frame := components.RenderOuterFrame(header, body, m.width, m.height)
+	return components.ApplyBackground(frame)
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -355,20 +357,20 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	innerWidth := m.width - 2
+	gridWidth := m.width - 2 - 1 // outer frame borders - left margin
 	minCardWidth := 40
-	numCols := innerWidth / minCardWidth
+	numCols := gridWidth / minCardWidth
 	if numCols < 1 {
 		numCols = 1
 	}
 	if numCols > len(m.nodes) {
 		numCols = len(m.nodes)
 	}
-	cardWidth := innerWidth / numCols
+	cardWidth := gridWidth / numCols // visual width per card column
 
 	gridStartY := 2
 
-	clickX := msg.X - 1
+	clickX := msg.X - 2 // 1 for left frame border + 1 for left margin
 	clickY := msg.Y - gridStartY
 
 	if clickX < 0 || clickY < 0 {
