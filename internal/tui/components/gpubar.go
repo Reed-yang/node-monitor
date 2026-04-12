@@ -26,7 +26,7 @@ func RenderGradientBar(percent float64, width int, grad Gradient) string {
 			// Each filled char gets its own color based on position
 			threshold := i * 100 / width
 			color := grad.ColorAt(threshold)
-			b.WriteString(lipgloss.NewStyle().Foreground(color).Render("■"))
+			b.WriteString(lipgloss.NewStyle().Foreground(color).Render("█"))
 		} else {
 			b.WriteString(lipgloss.NewStyle().Foreground(ColorMeterBg).Render("░"))
 		}
