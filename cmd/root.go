@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -26,7 +25,6 @@ var (
 	flagInterval  float64
 	flagWorkers   int
 	flagStatic    bool
-	flagProcesses bool
 	flagDebug     bool
 )
 
@@ -50,7 +48,6 @@ func init() {
 	rootCmd.Flags().Float64VarP(&flagInterval, "interval", "i", 0, "Refresh interval in seconds")
 	rootCmd.Flags().IntVarP(&flagWorkers, "workers", "w", 0, "Max parallel SSH connections")
 	rootCmd.Flags().BoolVarP(&flagStatic, "static", "s", false, "Print once and exit (no TUI)")
-	rootCmd.Flags().BoolVarP(&flagProcesses, "processes", "p", false, "Toggle processes off (default: on)")
 	rootCmd.Flags().BoolVarP(&flagDebug, "debug", "d", false, "Verbose SSH error output")
 }
 
@@ -69,11 +66,6 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	if flagStatic {
 		cfg.Static = true
-	}
-	// Processes default to true now
-	showProcs := true
-	if cmd.Flags().Changed("processes") {
-		showProcs = !flagProcesses // -p toggles off
 	}
 
 	// Resolve nodes
@@ -104,7 +96,7 @@ func run(cmd *cobra.Command, args []string) error {
 		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
 			termWidth = w
 		}
-		renderStatic(results, cfg.Interval, termWidth, showProcs)
+		renderStatic(results, cfg.Interval, termWidth, true)
 		return nil
 	}
 
@@ -115,7 +107,7 @@ func run(cmd *cobra.Command, args []string) error {
 		cfg.Interval,
 		cfg.SSH.CommandTimeout,
 		cfg.Debug,
-		showProcs,
+		true,
 		tui.ViewPanel,
 		cfg.Groups,
 	)
@@ -181,15 +173,6 @@ func renderStatic(results []model.NodeStatus, interval float64, width int, showP
 			fmt.Println(components.RenderProcessTable(results, width, 0))
 		}
 	}
-}
-
-// renderNodeUsers returns comma-separated active users.
-func renderNodeUsers(node model.NodeStatus) string {
-	users := node.ActiveUsers()
-	if len(users) == 0 {
-		return ""
-	}
-	return strings.Join(users, ",")
 }
 
 func Execute(version string) {
