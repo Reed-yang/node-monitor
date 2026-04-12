@@ -7,9 +7,9 @@ import (
 	"github.com/siyuan/node-monitor/internal/model"
 )
 
-// QueryNode queries GPU info from a single node.
+// QueryNode queries GPU info and processes from a single node.
 func (p *Pool) QueryNode(host string, cmdTimeout int, debug bool) model.NodeStatus {
-	output, err := p.RunCommand(host, ListViewCommand(), cmdTimeout)
+	output, err := p.RunCommand(host, ListWithProcessesCommand(), cmdTimeout)
 	if err != nil {
 		errMsg := err.Error()
 		if !debug {
@@ -20,8 +20,8 @@ func (p *Pool) QueryNode(host string, cmdTimeout int, debug bool) model.NodeStat
 		return model.NodeStatus{Hostname: host, Error: &errMsg}
 	}
 
-	gpus := parseGPUOutput(output)
-	return model.NodeStatus{Hostname: host, GPUs: gpus}
+	result := parseDetailOutput(output)
+	return model.NodeStatus{Hostname: host, GPUs: result.GPUs}
 }
 
 // QueryNodeDetail queries detailed GPU, process, and system info from a node.

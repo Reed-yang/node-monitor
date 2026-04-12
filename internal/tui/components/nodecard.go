@@ -145,8 +145,10 @@ func renderCondensedCard(node model.NodeStatus, width int, selected bool, displa
 
 	// Replace top border with embedded title
 	lines := strings.Split(rendered, "\n")
-	if len(lines) > 0 {
-		lines[0] = embedTitle(lines[0], titleText, borderColor, width)
+	if len(lines) > 1 {
+		// Measure actual body line width to ensure title alignment
+		bodyWidth := lipgloss.Width(lines[1])
+		lines[0] = embedTitle(lines[0], titleText, borderColor, bodyWidth)
 	}
 
 	return strings.Join(lines, "\n")

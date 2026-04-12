@@ -251,9 +251,15 @@ func parseSystemInfo(section string) *model.SystemInfo {
 	return info
 }
 
-// ListViewCommand returns the nvidia-smi command for list view queries.
+// ListViewCommand returns the nvidia-smi command for list view queries (GPU stats only).
 func ListViewCommand() string {
 	return "nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total,name --format=csv,noheader,nounits"
+}
+
+// ListWithProcessesCommand returns the command for list view with process info (no system info).
+func ListWithProcessesCommand() string {
+	return fmt.Sprintf(`%s && echo '---PROCESSES---' && nvidia-smi --query-compute-apps=gpu_uuid,pid,used_memory,process_name --format=csv,noheader,nounits 2>/dev/null || true && echo '---GPU_UUID_MAP---' && nvidia-smi --query-gpu=index,uuid --format=csv,noheader,nounits 2>/dev/null || true && echo '---USERS---' && ps -eo pid,user --no-headers 2>/dev/null || true`,
+		ListViewCommand())
 }
 
 // DetailViewCommand returns the batched command for detail view queries.

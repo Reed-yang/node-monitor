@@ -170,6 +170,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.selectedIdx < 0 {
 			m.selectedIdx = 0
 		}
+		// Refresh detail panel if open
+		if m.bottomPanel == PanelDetail && m.detailNode != nil {
+			return m, m.queryDetail(m.detailNode.Hostname)
+		}
 		return m, nil
 
 	case detailResultMsg:
