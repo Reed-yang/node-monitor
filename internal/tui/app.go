@@ -73,15 +73,17 @@ type Model struct {
 	showProcesses bool
 
 	// UI state
-	viewMode    ViewMode // unused, kept for API
-	bottomPanel BottomPanel
-	selectedIdx int
-	sortMode    SortMode
-	showHelp    bool
-	searchQuery string
-	searching   bool
-	width       int
-	height      int
+	viewMode     ViewMode // unused, kept for API
+	bottomPanel  BottomPanel
+	selectedIdx  int
+	sortMode     SortMode
+	showHelp     bool
+	searchQuery  string
+	searching    bool
+	width        int
+	height       int
+	expanded     bool              // cards show inline processes
+	displayNames map[string]string // hostname -> short display name
 
 	// Groups
 	groups       map[string][]string
@@ -116,6 +118,8 @@ func NewModel(
 	}
 	sort.Strings(groupNames)
 
+	displayNames := components.ComputeDisplayNames(hosts)
+
 	return Model{
 		allHosts:      hosts,
 		hosts:         hosts,
@@ -127,6 +131,8 @@ func NewModel(
 		viewMode:      viewMode,
 		bottomPanel:   PanelProcesses,
 		selectedIdx:   0,
+		expanded:      true,
+		displayNames:  displayNames,
 		currentGroup:  -1,
 		groups:        groups,
 		groupNames:    groupNames,
@@ -185,56 +191,34 @@ func (m Model) View() string {
 		return components.RenderHelp(m.width, m.height)
 	}
 
-	innerWidth := m.width - 2 // outer frame borders
+	innerWidth := m.width - 2
 
-	// Header
 	header := components.RenderHeader(m.nodes, m.interval.Seconds(), innerWidth)
+	nodeGrid := components.RenderNodeGrid(m.nodes, m.selectedIdx, innerWidth, m.displayNames, m.expanded)
 
-	// Node grid
-	nodeGrid := components.RenderNodeGrid(m.nodes, m.selectedIdx, innerWidth)
-
-	// Bottom panel
 	var bottomTitle string
 	var bottomContent string
 
 	if m.bottomPanel == PanelDetail && m.detailNode != nil {
 		bottomTitle = m.detailNode.Hostname + " Detail"
 		bottomContent = components.RenderNodeDetail(*m.detailNode, m.detailSys, innerWidth)
-	} else if m.showProcesses {
-		bottomTitle = "Processes"
-		// Calculate available rows for process table
-		gridLines := strings.Count(nodeGrid, "\n") + 1
-		availRows := m.height - gridLines - 8 // header + divider + borders + footer
-		if availRows < 3 {
-			availRows = 3
-		}
-		bottomContent = components.RenderProcessTable(m.nodes, innerWidth, availRows)
 	}
 
-	// Assemble body
 	var bodyLines []string
 
-	// Add node grid lines
 	for _, line := range strings.Split(nodeGrid, "\n") {
 		bodyLines = append(bodyLines, " "+line)
 	}
 
-	// Divider + bottom panel
 	if bottomContent != "" {
-		divider := components.RenderDivider(bottomTitle, m.width)
-		// Strip the side borders from divider since outer frame adds them
 		bodyLines = append(bodyLines, "")
-		// We need to handle the divider specially — it replaces a full row in the frame
-		_ = divider
-		divLine := buildDivider(bottomTitle, innerWidth)
+		divLine := components.RenderDivider(bottomTitle, m.width)
 		bodyLines = append(bodyLines, divLine)
-
 		for _, line := range strings.Split(bottomContent, "\n") {
 			bodyLines = append(bodyLines, " "+line)
 		}
 	}
 
-	// Search bar
 	if m.searching {
 		searchLine := " Search: " + m.searchQuery + "█"
 		bodyLines = append(bodyLines, searchLine)
@@ -243,18 +227,6 @@ func (m Model) View() string {
 	body := strings.Join(bodyLines, "\n")
 
 	return components.RenderOuterFrame(header, body, m.width, m.height)
-}
-
-func buildDivider(title string, width int) string {
-	if title == "" {
-		return strings.Repeat("─", width)
-	}
-	prefix := "─┤ " + title + " ├"
-	remaining := width - len(prefix)
-	if remaining < 0 {
-		remaining = 0
-	}
-	return prefix + strings.Repeat("─", remaining)
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -333,10 +305,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "p":
-		m.showProcesses = !m.showProcesses
-		if !m.showProcesses {
-			m.bottomPanel = PanelProcesses
-		}
+		m.expanded = !m.expanded
 		return m, nil
 
 	case "s":
@@ -355,6 +324,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else {
 				m.hosts = m.allHosts
 			}
+			m.displayNames = components.ComputeDisplayNames(m.hosts)
 			m.selectedIdx = 0
 		}
 		return m, nil
@@ -377,9 +347,6 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Calculate which node card was clicked based on grid layout
-	// The node grid starts at row 2 (after header border + separator)
-	// Each card is approximately 6 rows high (border + 4 content + border)
 	if len(m.nodes) == 0 {
 		return m, nil
 	}
@@ -395,11 +362,9 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	cardWidth := innerWidth / numCols
 
-	// Approximate card height (border top + 3 content lines + border bottom = 5)
-	cardHeight := 6
-	gridStartY := 2 // after outer frame top border + separator line
+	gridStartY := 2
 
-	clickX := msg.X - 1 // adjust for outer frame left border
+	clickX := msg.X - 1
 	clickY := msg.Y - gridStartY
 
 	if clickX < 0 || clickY < 0 {
@@ -407,13 +372,40 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	col := clickX / cardWidth
-	row := clickY / cardHeight
-
 	if col >= numCols {
 		col = numCols - 1
 	}
 
-	nodeIdx := row*numCols + col
+	// Walk rows to find which row was clicked
+	nodeIdx := -1
+	currentY := 0
+	for rowStart := 0; rowStart < len(m.nodes); rowStart += numCols {
+		rowEnd := rowStart + numCols
+		if rowEnd > len(m.nodes) {
+			rowEnd = len(m.nodes)
+		}
+
+		maxHeight := 6
+		if m.expanded {
+			for i := rowStart; i < rowEnd; i++ {
+				procCount := len(m.nodes[i].ActiveUsers())
+				h := 6 + procCount
+				if h > maxHeight {
+					maxHeight = h
+				}
+			}
+		}
+
+		if clickY >= currentY && clickY < currentY+maxHeight {
+			idx := rowStart + col
+			if idx < rowEnd {
+				nodeIdx = idx
+			}
+			break
+		}
+		currentY += maxHeight
+	}
+
 	if nodeIdx >= 0 && nodeIdx < len(m.nodes) {
 		m.selectedIdx = nodeIdx
 		node := m.nodes[nodeIdx]
