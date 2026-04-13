@@ -4,7 +4,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/siyuan/node-monitor/internal/model"
+	"github.com/Reed-yang/node-monitor/internal/model"
 )
 
 // QueryNode queries GPU info and processes from a single node.

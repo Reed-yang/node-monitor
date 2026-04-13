@@ -6,9 +6,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/siyuan/node-monitor/internal/model"
-	sshpool "github.com/siyuan/node-monitor/internal/ssh"
-	"github.com/siyuan/node-monitor/internal/tui/components"
+	"github.com/Reed-yang/node-monitor/internal/model"
+	sshpool "github.com/Reed-yang/node-monitor/internal/ssh"
+	"github.com/Reed-yang/node-monitor/internal/tui/components"
 )
 
 // ViewMode kept for API compatibility but only one mode now.

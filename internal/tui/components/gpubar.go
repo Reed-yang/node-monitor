@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/siyuan/node-monitor/internal/model"
+	"github.com/Reed-yang/node-monitor/internal/model"
 )
 
 // RenderGradientBar renders a btop-style gradient progress bar.

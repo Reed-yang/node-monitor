@@ -1,4 +1,4 @@
-module github.com/siyuan/node-monitor
+module github.com/Reed-yang/node-monitor
 
 go 1.25.0
 

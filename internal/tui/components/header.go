@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/siyuan/node-monitor/internal/model"
+	"github.com/Reed-yang/node-monitor/internal/model"
 )
 
 // RenderHeader renders the header line content (for embedding in outer frame border).

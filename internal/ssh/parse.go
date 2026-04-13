@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/siyuan/node-monitor/internal/model"
+	"github.com/Reed-yang/node-monitor/internal/model"
 )
 
 // DetailResult holds the parsed output from a detail query.

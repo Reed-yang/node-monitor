@@ -9,12 +9,12 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/siyuan/node-monitor/internal/config"
-	"github.com/siyuan/node-monitor/internal/model"
-	"github.com/siyuan/node-monitor/internal/slurm"
-	sshpool "github.com/siyuan/node-monitor/internal/ssh"
-	"github.com/siyuan/node-monitor/internal/tui"
-	"github.com/siyuan/node-monitor/internal/tui/components"
+	"github.com/Reed-yang/node-monitor/internal/config"
+	"github.com/Reed-yang/node-monitor/internal/model"
+	"github.com/Reed-yang/node-monitor/internal/slurm"
+	sshpool "github.com/Reed-yang/node-monitor/internal/ssh"
+	"github.com/Reed-yang/node-monitor/internal/tui"
+	"github.com/Reed-yang/node-monitor/internal/tui/components"
 )
 
 var appVersion string

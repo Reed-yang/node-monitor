@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/siyuan/node-monitor/internal/model"
+	"github.com/Reed-yang/node-monitor/internal/model"
 )
 
 // RenderNodeGrid renders all nodes as a grid of condensed cards.
