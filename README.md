@@ -1,185 +1,204 @@
-# Node Monitor 🖥️
+# node-monitor
 
-A beautiful CLI tool for monitoring GPU resources across Slurm cluster nodes in real-time.
+A fast, interactive terminal dashboard for monitoring GPU utilization across Slurm cluster nodes in real-time. Built in Go with a btop++-inspired TUI.
 
-![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macOS-lightgrey)
 
-## ✨ Features
+## Installation
 
-- 🔍 **Auto-detect Slurm nodes** - Automatically discovers all nodes in your cluster via `sinfo`
-- 🎮 **Real-time GPU monitoring** - Shows utilization and memory usage for each GPU
-- 🎨 **Beautiful CLI** - Colorful, live-updating dashboard using Rich library
-- ⚡ **Fast parallel queries** - Concurrent SSH connections for quick updates
-- 📊 **Multi-column layout** - Auto-adapts to terminal width for optimal display
-- 👤 **Process tracking** - Show GPU processes grouped by user (optional)
+### Pre-built binaries (recommended)
 
-## 📦 Installation
+Download from [GitHub Releases](https://github.com/Reed-yang/node-monitor/releases/latest):
 
 ```bash
-# Clone the repository
-git clone <repo-url>
+# Linux x86_64
+curl -sSL https://github.com/Reed-yang/node-monitor/releases/latest/download/node-monitor_0.1.0_linux_amd64.tar.gz | tar xz
+sudo mv node-monitor /usr/local/bin/
+
+# Linux ARM64
+curl -sSL https://github.com/Reed-yang/node-monitor/releases/latest/download/node-monitor_0.1.0_linux_arm64.tar.gz | tar xz
+sudo mv node-monitor /usr/local/bin/
+
+# macOS Apple Silicon
+curl -sSL https://github.com/Reed-yang/node-monitor/releases/latest/download/node-monitor_0.1.0_darwin_arm64.tar.gz | tar xz
+sudo mv node-monitor /usr/local/bin/
+
+# macOS Intel
+curl -sSL https://github.com/Reed-yang/node-monitor/releases/latest/download/node-monitor_0.1.0_darwin_amd64.tar.gz | tar xz
+sudo mv node-monitor /usr/local/bin/
+```
+
+### go install
+
+```bash
+go install github.com/Reed-yang/node-monitor@latest
+```
+
+### Build from source
+
+```bash
+git clone https://github.com/Reed-yang/node-monitor.git
 cd node-monitor
-
-# Install with pip
-pip install -e .
+make build        # outputs ./node-monitor
+make install      # copies to ~/.local/bin/
 ```
 
-## 🚀 Usage
+## Prerequisites
 
-### Basic Usage
+- SSH access to cluster nodes (passwordless key-based auth recommended)
+- `nvidia-smi` installed on each monitored node
+- (Optional) Slurm for automatic node discovery via `sinfo`
+
+## Quick start
 
 ```bash
-# Auto-detect Slurm nodes and start monitoring
+# Auto-detect Slurm nodes and launch dashboard
 node-monitor
-```
 
-### Specify Nodes Manually
-
-```bash
 # Monitor specific nodes
-node-monitor --nodes visko-1,visko-2,visko-3
-# or short form
 node-monitor -n visko-1,visko-2,visko-3
+
+# Monitor a predefined node group
+node-monitor -g train
+
+# Single snapshot, no TUI (for scripting)
+node-monitor -s
 ```
 
-### Compact Table View
-
-```bash
-# Use compact table view (recommended for many nodes)
-node-monitor -c
-```
-
-### Show GPU Processes
-
-```bash
-# Show GPU processes with user info
-node-monitor -c -p
-# or simply (auto-enables compact mode)
-node-monitor -p
-```
-
-### Custom Refresh Interval
-
-```bash
-# Refresh every 5 seconds
-node-monitor -i 5
-```
-
-### Scrollable Mode
-
-```bash
-# Disable fullscreen for terminal scrolling (useful for very many nodes)
-node-monitor -c -F
-```
-
-### Debug Mode
-
-```bash
-# Enable debug mode for verbose SSH error output (useful for troubleshooting SSH issues)
-node-monitor -d
-# or combine with other options
-node-monitor -c -d
-```
-
-### All Options
+## Usage
 
 ```
-Usage: node-monitor [OPTIONS]
+node-monitor [flags]
 
-Options:
-  -n, --nodes TEXT       Comma-separated list of nodes to monitor
-  -i, --interval FLOAT   Refresh interval in seconds (default: 2.0)
-  -w, --workers INTEGER  Maximum parallel SSH connections (default: 8)
-  -c, --compact          Use compact table view (fits more nodes)
-  -F, --no-fullscreen    Disable fullscreen mode (allows scrolling)
-  -p, --processes        Show GPU processes with user info
-  -d, --debug            Enable debug mode with verbose SSH error output
-  --version              Show the version and exit.
-  --help                 Show this message and exit.
+Flags:
+  -n, --nodes string     Comma-separated list of nodes
+  -g, --group string     Node group from config file
+  -i, --interval float   Refresh interval in seconds (default 2)
+  -w, --workers int      Max parallel SSH connections (default 8)
+  -s, --static           Print once and exit (no TUI)
+  -d, --debug            Verbose SSH error output
+      --version          Show version
+  -h, --help             Show help
 ```
 
-## 📸 Display Modes
+**Node resolution order:** `--nodes` flag > `--group` flag > Slurm auto-detection (`sinfo`).
 
-### Default Mode (Full Screen Panels)
+## TUI keybindings
 
-Each node displayed as a separate panel with GPU bars:
+| Key | Action |
+|-----|--------|
+| `j` / `k` / `Up` / `Down` | Navigate nodes |
+| `Enter` / `Click` | Open node detail panel |
+| `Esc` | Close detail / search / exit |
+| `q` | Quit |
+| `s` | Cycle sort: name -> utilization -> memory |
+| `g` | Cycle node groups |
+| `/` | Search / filter nodes by name |
+| `?` | Toggle help overlay |
 
-```
-╭─────────────────────── ✓ visko-1 ───────────────────────╮
-│ GPU0 ██████████████░░ 87%  │ ████████████░░ 74.9G/79.6G │
-│ GPU1 ████████████░░░░ 78%  │ ██████████████ 75.0G/79.6G │
-│ ...                                                      │
-╰──────────────────────────────────────────────────────────╯
-```
+## Display
 
-### Compact Mode (`-c`)
+### Interactive TUI (default)
 
-Table view with dual-column GPU layout for wide terminals:
-
-```
-  Node           #   Utl        Mem         │  #   Utl        Mem
- ─────────────────────────────────────────────────────────────────
-  🔥 visko-1    0  100%  ████  74.9G/79.6G  │  1   78%  ███  75.0G/79.6G
-               2  100%  ████  76.5G/79.6G  │  3   95%  ███  75.0G/79.6G
-```
-
-### Compact + Processes (`-c -p`)
-
-Shows GPU processes grouped by user below the table:
+Auto-responsive card grid with per-node GPU utilization bars, memory usage, GPU heatmap, and inline process summary:
 
 ```
-  📋 visko-1 processes: user1[GPU 0,1]:15.2G │ user2[GPU 2,3]:30.5G
-  📋 visko-3 processes: user3[GPU 0-7]:60.0G
+╭─┤ GPU Cluster Monitor ├── 4 nodes │ 32 GPUs │ ⚡73% │ 💾285G ── s:sort /:search ?:help ──╮
+│                                                                                           │
+│  ╭─┤ 🔥 visko-1 ├──────────────╮  ╭─┤ ⚡ visko-2 ├──────────────╮                        │
+│  │ Util ██████████████████░░ 87%│  │ Util █████████████████░░░ 74%│                        │
+│  │ Mem  ████████████░░░░░░ 150G │  │ Mem  ███████████░░░░░░░ 146G│                        │
+│  │ GPU  ████████ 8x A100-SXM   │  │ GPU  ████████ 8x A100-SXM   │                        │
+│  │ alice 0-7 150G train.py      │  │ bob   0-7 146G pretrain.py   │                        │
+│  ╰──────────────────────────────╯  ╰──────────────────────────────╯                        │
+│  ╭─┤ ✓ visko-3 ├───────────────╮  ╭─┤ ✗ visko-4 ├───────────────╮                        │
+│  │ Util ████░░░░░░░░░░░░░░ 12% │  │                              │                        │
+│  │ Mem  ██░░░░░░░░░░░░░░░  12G │  │  ⚠ SSH connection timed out  │                        │
+│  │ GPU  ████████ 8x A100-SXM   │  │                              │                        │
+│  ╰──────────────────────────────╯  ╰──────────────────────────────╯                        │
+╰───────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## 📋 Requirements
+Press `Enter` on a node to open the **detail panel** with per-GPU bars, full process list, and system info (load average, RAM, driver version).
 
-- Python 3.8+
-- SSH access to cluster nodes (passwordless recommended)
-- `nvidia-smi` installed on each node
-- (Optional) Slurm for auto-detection of nodes
+Node status icons reflect average GPU utilization: `🔥` >80%, `⚡` 50-80%, `✓` <50%, `✗` offline.
 
-## 📝 Changelog
+### Static mode (`-s`)
 
-### v0.1.0 (2026-01-09)
+Single snapshot printed to stdout, suitable for piping and scripting:
 
-#### 🎉 Initial Release (`efed059`)
-- Basic GPU monitoring via SSH
-- Auto-detect Slurm nodes using `sinfo`
-- Beautiful CLI dashboard with Rich library
-- Parallel SSH queries for performance
-- Real-time refresh with configurable interval
+```
+GPU Cluster Monitor │ 4 nodes │ 32 GPUs │ ⚡73% │ 💾285G │ 2026-04-13 15:04:05
 
-#### ✨ Compact & Scrollable Modes (`3e95c9a`)
-- Added `-c / --compact` flag for table view
-- Added `-F / --no-fullscreen` flag for terminal scrolling
-- Compact mode uses less vertical space
+ 🔥 visko-1   ██████████████████░░  87%  150G/638G  ████████  8x A100-SXM
+ ⚡ visko-2   █████████████████░░░  74%  146G/638G  ████████  8x A100-SXM
+ ✓  visko-3   ████░░░░░░░░░░░░░░░░  12%   12G/638G  ████████  8x A100-SXM
+ ✗  visko-4                         ⚠ SSH connection timed out
 
-#### 📊 Auto Multi-Column Layout (`5d8afe6`)
-- Terminal width auto-detection
-- Multi-column node panels in fullscreen mode (≥130 chars)
-- Dual-GPU rows in compact mode (≥120 chars)
-- Optimal use of horizontal screen space
+Processes:
+ USER     NODE      GPU    MEM      CMD
+ alice    visko-1   0-7   150.1G    train.py
+ bob      visko-2   0-7   146.3G    pretrain.py
+```
 
-#### 🔧 Layout Optimization (`9e0420f`)
-- Reduced column widths for better density
-- Optimized header labels (GPU → #, Util → Utl)
-- Lowered dual-column threshold from 150 to 120 chars
-- More compact progress bars (8→6 chars)
+## Configuration
 
-#### 👤 Process Display (`0d08cf1`)
-- Added `-p / --processes` flag
-- Shows GPU processes with user info
-- Processes grouped by user with GPU IDs and memory
-- Queries via `nvidia-smi --query-compute-apps`
+Config file: `~/.config/node-monitor/config.toml`
 
-#### 🔧 Debug Mode (`HEAD`)
-- Added `-d / --debug` flag for SSH troubleshooting
-- Verbose SSH debug output with `-v` flag
-- Detailed error messages including STDERR/STDOUT
-- Shows timeout duration and exception types
+```toml
+# Refresh interval (seconds)
+interval = 2.0
 
-## 📄 License
+# Max parallel SSH connections
+workers = 8
 
-MIT License
+# Default node list (omit to auto-detect from Slurm)
+# nodes = ["visko-1", "visko-2", "visko-3"]
+
+[ssh]
+connect_timeout = 5     # SSH connection timeout (seconds)
+command_timeout = 10    # Remote command timeout (seconds)
+# user = ""             # SSH user (default: current user)
+# identity_file = ""    # SSH key path (default: auto-detect)
+
+# Node groups - cycle with 'g' key in TUI
+[groups]
+# train = ["visko-1", "visko-2", "visko-3", "visko-4"]
+# inference = ["infer-1", "infer-2"]
+```
+
+A sample config is included at `configs/default.toml`.
+
+**SSH key resolution:** config `identity_file` > `~/.ssh/config` IdentityFile > `~/.ssh/id_ed25519` / `id_rsa` / `id_ecdsa` > SSH agent.
+
+## Architecture
+
+```
+main.go                         Entry point, version injection via ldflags
+cmd/root.go                     CLI flags (cobra), static/TUI mode dispatch
+internal/
+  config/config.go              Config loading (viper), SSH key resolution
+  model/types.go                Data types: NodeStatus, GPUInfo, GPUProcess, SystemInfo
+  slurm/detect.go               Slurm node auto-detection via sinfo
+  ssh/
+    pool.go                     SSH connection pool with keepalive
+    query.go                    Parallel node queries (workers pool)
+    parse.go                    nvidia-smi output parsing
+  tui/
+    app.go                      Bubble Tea model: Update/View loop, keybindings, mouse
+    components/
+      nodecard.go               Node card grid rendering
+      nodedetail.go             Detail panel: per-GPU bars, processes, sysinfo
+      gpubar.go                 Gradient progress bars, GPU heatmap
+      proctable.go              Process table (aggregated by user)
+      header.go                 Header bar with cluster stats
+      hostname.go               Smart hostname truncation (common prefix stripping)
+      styles.go                 Color palette (btop++ muted tones)
+      help.go                   Keybinding help overlay
+```
+
+## License
+
+MIT
