@@ -1,2 +1,6 @@
 __pycache__
-node_monitor.egg-info
+node_monitor.egg-info*.exe
+*.egg-info
+# compiled binary
+/node-monitor.superpowers/
+.superpowers/

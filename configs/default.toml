@@ -1,0 +1,29 @@
+# Node Monitor configuration
+# Copy to ~/.config/node-monitor/config.toml
+
+# Default node list (omit to auto-detect from Slurm)
+# nodes = ["visko-1", "visko-2", "visko-3"]
+
+# Refresh interval (seconds)
+interval = 2.0
+
+# Max parallel SSH connections
+workers = 8
+
+# Default view mode: "panel" | "compact"
+view = "panel"
+
+# Show process info
+processes = false
+
+# SSH configuration
+[ssh]
+connect_timeout = 5   # SSH connection timeout (seconds)
+command_timeout = 10  # Command execution timeout (seconds)
+# identity_file = ""  # Private key path (empty = default)
+# user = ""           # SSH username (empty = current user)
+
+# Node groups (optional)
+# [groups]
+# train = ["visko-1", "visko-2", "visko-3", "visko-4"]
+# inference = ["infer-1", "infer-2"]
